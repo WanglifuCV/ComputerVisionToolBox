@@ -25,7 +25,7 @@ class VGGNet(object):
                     padding='same',
                     activation='relu',
                     batch_norm=None):
-        if batch_norm is not None and batch_norm.lower() == 'affine':
+        if batch_norm is not None and batch_norm.lower() == 'before_activation':
             """
             表示batch_norm是加载激活函数之前的
             """
@@ -40,7 +40,7 @@ class VGGNet(object):
             x = layers.BatchNormalization(name='{}_bn_{}'.format(name_scope, conv_filter_idx))(x)
             output_tensor = layers.Activation(name='{}_{}_{}'.format(name_scope, activation, conv_filter_idx),
                                               activation=activation)(x)
-        elif batch_norm is not None and batch_norm.lower() == 'activation':
+        elif batch_norm is not None and batch_norm.lower() == 'after_activation':
             """
                         表示batch_norm是加载激活函数之后的
                         """

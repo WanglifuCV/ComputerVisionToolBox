@@ -9,30 +9,16 @@ from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import TensorBoard, ModelCheckpoint
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from models.vgg import VGGNet19
-from models.alexnet import AlexNet
+from nets.vgg import VGGNet19
+from nets.alexnet import AlexNet
 from keras.applications.vgg19 import VGG19
 from keras.applications.resnet50 import ResNet50
 import pickle
 import argparse
+import json
+from contextlib import redirect_stdout
 
-
-FLAGS = tf.app.flags.FLAGS
-
-tf.app.flags.DEFINE_string('optimizer', 'sgd', 'Optimizer')
-tf.app.flags.DEFINE_string('backbone', 'vgg19', 'Backbone')
-tf.app.flags.DEFINE_float('learning_rate', 1e-3, 'Learning rate')
-tf.app.flags.DEFINE_string('gpu_list', '0', 'GPU')
-tf.app.flags.DEFINE_float('momentum', 0.9, 'Momentum of SGD')
-tf.app.flags.DEFINE_string('batch_norm', 'activation', 'Batch norm')
-tf.app.flags.DEFINE_integer('steps_per_epoch', 320, 'Steps per epoch')
-tf.app.flags.DEFINE_integer('epochs', 50, 'Epochs')
-tf.app.flags.DEFINE_integer('batch_size', 16, 'Batch size')
-tf.app.flags.DEFINE_string('log_folder_dir', './logs/cats-vs-dogs/vgg19_keras_after_activation/', 'Tensorboard log dir')
-tf.app.flags.DEFINE_integer('category_num', 2, 'Category number')
-tf.app.flags.DEFINE_string('history_save_dir', 'alexnet', 'History save dir.')
-tf.app.flags.DEFINE_integer('input_size', 224, 'input shape')
-tf.app.flags.DEFINE_string('model_save_dir', 'vgg19.h5', 'model_save_dir')
+root_dir = None
 
 
 def arg_parse():
@@ -41,7 +27,31 @@ def arg_parse():
     parser.add_argument('--backbone', type=str, default='vgg19', metavar='backbone', help='Backbone')
     parser.add_argument('--learning_rate', type=float, default=1e-3, metavar='learning_rate', help='Learning rate')
     parser.add_argument('--gpu_list', type=str, default='0', metavar='gpu_list', help='GPU list')
-    parser.add_argument('--gpu_list', type=str, default='0', metavar='gpu_list', help='GPU list')
+    parser.add_argument('--momentum', type=float, default=0.9, metavar='momentum', help='Momentum of SGD')
+    parser.add_argument('--batch_norm_type', type=str, default='before_activation', metavar='batch_norm_type', help='Batch norm type')
+    parser.add_argument('--steps_per_epoch', type=int, default=1000, metavar='steps_per_epoch', help='Steps per epoch')
+    parser.add_argument('--epochs', type=int, default=50, metavar='epochs', help='Epochs')
+    parser.add_argument('--batch_size', type=int, default=16, metavar='batch_size', help='Batch size')
+    parser.add_argument('--model_save_dir', type=str, default=root_dir, metavar='model_save_dir', help='Model save dir')
+    parser.add_argument('--category_num', type=int, default=2, metavar='category_num', help='Category num')
+    parser.add_argument('--input_size', type=int, default=224, metavar='input_size', help='Input size')
+    return parser
+
+
+def dir_prepare():
+    if osp.exists(Args.model_save_dir):
+        shutil.rmtree(Args.model_save_dir)
+    
+    os.mkdir(Args.model_save_dir)
+    os.mkdir(osp.join(Args.model_save_dir, 'log'))
+    os.mkdir(osp.join(Args.model_save_dir, 'model'))
+    os.mkdir(osp.join(Args.model_save_dir, 'history'))
+
+
+def save_args():
+    with open(osp.join(Args.model_save_dir, 'args.json'), 'w') as file_writer:
+        json.dump(vars(Args), file_writer, indent=4, ensure_ascii=False)
+
 
 def generate_data_flow(train_data_folder, val_data_folder):
     train_datagen = ImageDataGenerator(rescale=1./255,
@@ -55,15 +65,15 @@ def generate_data_flow(train_data_folder, val_data_folder):
 
     train_generator = train_datagen.flow_from_directory(
         directory=train_data_folder,
-        target_size=(FLAGS.input_size, FLAGS.input_size),
-        batch_size=FLAGS.batch_size,
+        target_size=(Args.input_size, Args.input_size),
+        batch_size=Args.batch_size,
         class_mode='categorical'
     )
 
     val_generator = val_datagen.flow_from_directory(
         directory=val_data_folder,
-        target_size=(FLAGS.input_size, FLAGS.input_size),
-        batch_size=FLAGS.batch_size,
+        target_size=(Args.input_size, Args.input_size),
+        batch_size=Args.batch_size,
         class_mode='categorical'
     )
 
@@ -71,20 +81,20 @@ def generate_data_flow(train_data_folder, val_data_folder):
 
 
 def inference():
-    if FLAGS.backbone.lower() == 'vgg19':
-        model = VGGNet19(input_shape=(FLAGS.input_size, FLAGS.input_size, 3),
-                         batch_norm=FLAGS.batch_norm,
-                         classes=FLAGS.category_num).model
-    elif FLAGS.backbone.lower() == 'vgg19_app':
+    if Args.backbone.lower() == 'vgg19':
+        model = VGGNet19(input_shape=(Args.input_size, Args.input_size, 3),
+                         batch_norm=Args.batch_norm_type,
+                         classes=Args.category_num).model
+    elif Args.backbone.lower() == 'vgg19_app':
         model = VGG19(weights=None,
-                      input_shape=(FLAGS.input_size, FLAGS.input_size, 3),
-                      classes=FLAGS.category_num)
-    elif FLAGS.backbone.lower() == 'resnet50':
+                      input_shape=(Args.input_size, Args.input_size, 3),
+                      classes=Args.category_num)
+    elif Args.backbone.lower() == 'resnet50':
         model = ResNet50(weights=None,
-                         input_shape=(FLAGS.input_size, FLAGS.input_size, 3),
-                         classes=FLAGS.category_num)
-    elif FLAGS.backbone.lower() == 'alexnet':
-        alexnet = AlexNet(input_shape=(FLAGS.input_size, FLAGS.input_size, 3), class_num=FLAGS.category_num)
+                         input_shape=(Args.input_size, Args.input_size, 3),
+                         classes=Args.category_num)
+    elif Args.backbone.lower() == 'alexnet':
+        alexnet = AlexNet(input_shape=(Args.input_size, Args.input_size, 3), class_num=Args.category_num)
         model = alexnet.build_model()
     else:
         model = None
@@ -92,11 +102,25 @@ def inference():
     if model is not None:
         model.summary()
 
+        with open(osp.join(Args.model_save_dir, 'model.json'), 'w') as file_writer:
+            json.dump(json.loads(model.to_json()), file_writer, indent=4, ensure_ascii=False)
+
+        # model.summary(print_fn=myprint)
+
+        with open(osp.join(Args.model_save_dir, 'modelsummary.txt'), 'w') as f:
+            with redirect_stdout(f):
+                model.summary()
+
     return model
 
 
+def myprint(s):
+    with open(osp.join(Args.model_save_dir, 'model.txt') ,'w+') as file_writer:
+        print(s, file=file_writer)
+
+
 def make_gpu_config():
-    os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu_list
+    os.environ['CUDA_VISIBLE_DEVICES'] = Args.gpu_list
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7, allow_growth=True)
     config = tf.ConfigProto(gpu_options=gpu_options)
 
@@ -109,49 +133,46 @@ def train(train_generator, test_generator):
 
     model = inference()
     if model is None:
-        print('Model error : {}'.format(FLAGS.backbone))
+        print('Model error : {}'.format(Args.backbone))
     else:
         model.summary()
 
-    if FLAGS.optimizer.lower() == 'sgd':
-        opt = optimizers.SGD(lr=FLAGS.learning_rate,
-                             momentum=FLAGS.momentum)
-    elif FLAGS.optimizer.lower() == 'rmsprop':
-        opt = optimizers.RMSprop(lr=FLAGS.learning_rate)
+    if Args.optimizer.lower() == 'sgd':
+        opt = optimizers.SGD(lr=Args.learning_rate,
+                             momentum=Args.momentum)
+    elif Args.optimizer.lower() == 'rmsprop':
+        opt = optimizers.RMSprop(lr=Args.learning_rate)
     else:
         opt = None
-        print('Optimizer error : {}'.format(FLAGS.optimizer))
+        print('Optimizer error : {}'.format(Args.optimizer))
 
     model.compile(loss='categorical_crossentropy',
                   optimizer=opt,
                   metrics=['acc'])
 
-    if not osp.isdir(FLAGS.log_folder_dir):
-        os.mkdir(FLAGS.log_folder_dir)
-
     history = model.fit_generator(
         train_generator,
-        steps_per_epoch=FLAGS.steps_per_epoch,
-        epochs=FLAGS.epochs,
+        steps_per_epoch=Args.steps_per_epoch,
+        epochs=Args.epochs,
         validation_data=test_generator,
         validation_steps=50,
         callbacks=callbacks_config()
     )
 
-    with open(osp.join('history', FLAGS.history_save_dir), 'wb') as file_writer:
+    with open(osp.join(Args.model_save_dir, 'history', 'history'), 'wb') as file_writer:
         pickle.dump(history, file_writer)
     return history
 
 def callbacks_config():
     callbacks = [
         TensorBoard(
-            log_dir=FLAGS.log_folder_dir,
+            log_dir=osp.join(Args.model_save_dir, 'log'),
             histogram_freq=0,
             write_graph=True,
             batch_size=32
         ), 
         ModelCheckpoint(
-            osp.join('models', FLAGS.model_save_dir),
+            osp.join(Args.model_save_dir, 'model', '{}.h5'.format(Args.backbone)),
             monitor='val_loss',
             mode='min',
             save_weights_only=True,
@@ -188,8 +209,14 @@ def plot_history(history, history_save_name):
 
     plt.show()
 
+ArgParser = arg_parse()
+Args = ArgParser.parse_args()
+
+
 
 if __name__ == '__main__':
+    dir_prepare()
+    save_args()
     train_folder = '/home/lifu/data/datasets/classification/dogs-vs-cats/train'
     val_folder = '/home/lifu/data/datasets/classification/dogs-vs-cats/validation'
     train_gen, test_gen = generate_data_flow(train_data_folder=train_folder,
