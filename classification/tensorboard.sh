@@ -1,2 +1,2 @@
-CUDA_VISIBLE_DEVICES=3 tensorboard --logdir=./logs/cats-vs-dogs/ --port=6008
+CUDA_VISIBLE_DEVICES=1 tensorboard --logdir=./models/cifar100/ --port=6009
 

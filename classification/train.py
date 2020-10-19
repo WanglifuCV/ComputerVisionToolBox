@@ -17,35 +17,23 @@ import pickle
 import argparse
 import json
 from contextlib import redirect_stdout
-
-root_dir = None
-
-
-def arg_parse():
-    parser = argparse.ArgumentParser(description='Parse argments.')
-    parser.add_argument('--optimizer', type=str, default='sgd', metavar='optimizer', help='Optimizer')
-    parser.add_argument('--backbone', type=str, default='vgg19', metavar='backbone', help='Backbone')
-    parser.add_argument('--learning_rate', type=float, default=1e-3, metavar='learning_rate', help='Learning rate')
-    parser.add_argument('--gpu_list', type=str, default='0', metavar='gpu_list', help='GPU list')
-    parser.add_argument('--momentum', type=float, default=0.9, metavar='momentum', help='Momentum of SGD')
-    parser.add_argument('--batch_norm_type', type=str, default='before_activation', metavar='batch_norm_type', help='Batch norm type')
-    parser.add_argument('--steps_per_epoch', type=int, default=1000, metavar='steps_per_epoch', help='Steps per epoch')
-    parser.add_argument('--epochs', type=int, default=50, metavar='epochs', help='Epochs')
-    parser.add_argument('--batch_size', type=int, default=16, metavar='batch_size', help='Batch size')
-    parser.add_argument('--model_save_dir', type=str, default=root_dir, metavar='model_save_dir', help='Model save dir')
-    parser.add_argument('--category_num', type=int, default=2, metavar='category_num', help='Category num')
-    parser.add_argument('--input_size', type=int, default=224, metavar='input_size', help='Input size')
-    return parser
+from utils.argments_parser import Args, arg_parser
+from utils.data_loader import generate_data_flow_from_folder, generate_data_flow_from_dataset
+from keras import optimizers
 
 
 def dir_prepare():
-    if osp.exists(Args.model_save_dir):
-        shutil.rmtree(Args.model_save_dir)
+    # if osp.exists(Args.model_save_dir):
+    #     shutil.rmtree(Args.model_save_dir)
     
-    os.mkdir(Args.model_save_dir)
-    os.mkdir(osp.join(Args.model_save_dir, 'log'))
-    os.mkdir(osp.join(Args.model_save_dir, 'model'))
-    os.mkdir(osp.join(Args.model_save_dir, 'history'))
+    if not osp.exists(Args.model_save_dir):
+        os.mkdir(Args.model_save_dir)
+    if not osp.exists(osp.join(Args.model_save_dir, 'log')):
+        os.mkdir(osp.join(Args.model_save_dir, 'log'))
+    if not osp.exists(osp.join(Args.model_save_dir, 'model')):
+        os.mkdir(osp.join(Args.model_save_dir, 'model'))
+    if not osp.exists(osp.join(Args.model_save_dir, 'history')):
+        os.mkdir(osp.join(Args.model_save_dir, 'history'))
 
 
 def save_args():
@@ -53,49 +41,31 @@ def save_args():
         json.dump(vars(Args), file_writer, indent=4, ensure_ascii=False)
 
 
-def generate_data_flow(train_data_folder, val_data_folder):
-    train_datagen = ImageDataGenerator(rescale=1./255,
-                                       rotation_range=10,
-                                       horizontal_flip=True,
-                                       zoom_range=0.2,
-                                       shear_range=0.2,
-                                       width_shift_range=0.2,
-                                       height_shift_range=0.2)
-    val_datagen = ImageDataGenerator(rescale=1./ 255)
-
-    train_generator = train_datagen.flow_from_directory(
-        directory=train_data_folder,
-        target_size=(Args.input_size, Args.input_size),
-        batch_size=Args.batch_size,
-        class_mode='categorical'
-    )
-
-    val_generator = val_datagen.flow_from_directory(
-        directory=val_data_folder,
-        target_size=(Args.input_size, Args.input_size),
-        batch_size=Args.batch_size,
-        class_mode='categorical'
-    )
-
-    return train_generator, val_generator
-
-
 def inference():
     if Args.backbone.lower() == 'vgg19':
-        model = VGGNet19(input_shape=(Args.input_size, Args.input_size, 3),
+        vgg19 = VGGNet19(input_shape=(Args.input_size, Args.input_size, 3),
                          batch_norm=Args.batch_norm_type,
-                         classes=Args.category_num).model
+                         classes=Args.category_num,
+                         pooling_method=Args.final_pooling)
+        if Args.architecture.lower() == 'cifar':
+            model = vgg19.build_cifar()
+        else:
+            model = vgg19.build()
+        print("Batch norm type : {}".format(Args.batch_norm_type))
     elif Args.backbone.lower() == 'vgg19_app':
-        model = VGG19(weights=None,
+        vgg19 = VGG19(weights=None,
                       input_shape=(Args.input_size, Args.input_size, 3),
-                      classes=Args.category_num)
+                      classes=Args.category_num).model
     elif Args.backbone.lower() == 'resnet50':
         model = ResNet50(weights=None,
                          input_shape=(Args.input_size, Args.input_size, 3),
                          classes=Args.category_num)
     elif Args.backbone.lower() == 'alexnet':
         alexnet = AlexNet(input_shape=(Args.input_size, Args.input_size, 3), class_num=Args.category_num)
-        model = alexnet.build_model()
+        if Args.architecture.lower() == 'cifar':
+            model = alexnet.build_model_cifar(dataset=Args.dataset_name)
+        else:
+            model = alexnet.build_model(dataset=Args.dataset_name)
     else:
         model = None
 
@@ -136,12 +106,18 @@ def train(train_generator, test_generator):
         print('Model error : {}'.format(Args.backbone))
     else:
         model.summary()
+        if Args.pre_train_model is not None:
+            model.load_weights(Args.pre_train_model)
 
     if Args.optimizer.lower() == 'sgd':
-        opt = optimizers.SGD(lr=Args.learning_rate,
-                             momentum=Args.momentum)
+        opt = optimizers.SGD(
+            lr=Args.learning_rate,
+            momentum=Args.momentum
+            )
     elif Args.optimizer.lower() == 'rmsprop':
-        opt = optimizers.RMSprop(lr=Args.learning_rate)
+        opt = optimizers.RMSprop(
+            lr=Args.learning_rate
+            )
     else:
         opt = None
         print('Optimizer error : {}'.format(Args.optimizer))
@@ -209,16 +185,16 @@ def plot_history(history, history_save_name):
 
     plt.show()
 
-ArgParser = arg_parse()
-Args = ArgParser.parse_args()
-
-
 
 if __name__ == '__main__':
     dir_prepare()
-    save_args()
-    train_folder = '/home/lifu/data/datasets/classification/dogs-vs-cats/train'
-    val_folder = '/home/lifu/data/datasets/classification/dogs-vs-cats/validation'
-    train_gen, test_gen = generate_data_flow(train_data_folder=train_folder,
-                                             val_data_folder=val_folder)
+    arg_parser.save_args()
+    if Args.train_folder is not None and Args.val_folder is not None:
+        train_gen, test_gen = generate_data_flow_from_folder(train_data_folder=Args.train_folder,
+                                                val_data_folder=Args.val_folder)
+    elif Args.dataset_name is not None:
+        train_gen, val_gen, test_gen = generate_data_flow_from_dataset(dataset_name=Args.dataset_name, valid_size=0.1)
+    else:
+        raise RuntimeError('Data type error')
+
     history = train(train_generator=train_gen, test_generator=test_gen)
