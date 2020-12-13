@@ -1,4 +1,8 @@
 .vscode/
 classification/logs/
 classification/models/
-classification/nets/__pycache__/
+classification/__pycache__/
+classification/nets/keras/__pycache__/
+classification/nets/tensorflow_slim/__pycache__/
+classification/nets/tensorflow_slim/resnet/__pycache__/
+classification/nets/tensorflow/__pycache__/

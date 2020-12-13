@@ -6,7 +6,7 @@ import os.path as osp
 import tensorflow as tf 
 import keras.backend.tensorflow_backend as KTF
 from keras.preprocessing.image import ImageDataGenerator
-from keras.callbacks import TensorBoard, ModelCheckpoint
+from keras.callbacks import TensorBoard, ModelCheckpoint, LearningRateScheduler
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from nets.vgg import VGGNet19
