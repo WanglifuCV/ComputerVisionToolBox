@@ -84,5 +84,4 @@ def inverted_block(input, input_filters, output_filters, expand_ratio, stride, s
 
 
 def inverted_eff_block(input, input_filters, output_filters, expend_ratio, stride, scope):
-
     pass
