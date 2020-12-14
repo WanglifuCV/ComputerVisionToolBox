@@ -58,7 +58,7 @@ def BdLSTM_dynamic(inputs, num_hidden, name_scope):
             scope=name_scope
         )
 
-        ouputs = tf.concat(outputs, 2)
+        outputs = tf.concat(outputs, 2)
 
         return outputs
 
