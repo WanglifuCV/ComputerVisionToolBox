@@ -8,6 +8,21 @@ def LSTM(num_hidden):
     return lstm_cell
 
 
+def MultiLSTM(num_hidden, layer_num):
+
+    cell = []
+    for _ in range(layer_num):
+        lstm_cell = tf.contrib.rnn.LSTMCell(
+            num_hidden,
+            state_is_tuple=True
+        )
+        cell.append(lstm_cell)
+
+    multi_lstm = tf.contrib.rnn.MultiRNNCell(cell, state_is_tuple=True)
+    return multi_lstm
+
+
+
 def BdLSTM(inputs, num_hidden, name_scope):
     """
     实现双向lstm (static)
@@ -47,8 +62,13 @@ def BdLSTM_dynamic(inputs, num_hidden, name_scope):
         output: A tensor of bidirectional lstm output
     """
     with tf.name_scope(name_scope):
-        lstm_cell_fw = LSTM(num_hidden)
-        lstm_cell_bw = LSTM(num_hidden)
+        # 单层
+        # lstm_cell_fw = LSTM(num_hidden)
+        # lstm_cell_bw = LSTM(num_hidden)
+
+        # 多层？
+        lstm_cell_fw = MultiLSTM(num_hidden, layer_num=2)
+        lstm_cell_bw = MultiLSTM(num_hidden, layer_num=2)
 
         outputs, _ = tf.nn.bidirectional_dynamic_rnn(
             lstm_cell_fw, 
